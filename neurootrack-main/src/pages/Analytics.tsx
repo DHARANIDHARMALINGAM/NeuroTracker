@@ -4,6 +4,8 @@ import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getEntries, getPredictions } from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
+import type { HeadLocation, PainType, Symptom, RiskLevel, HeadacheType } from '@/types/headache';
 import type { HeadacheEntry, PredictionResult } from '@/types/headache';
 import { HEADACHE_TYPE_LABELS, TRIGGER_LABELS, type Trigger } from '@/types/headache';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
@@ -17,9 +19,66 @@ export default function Analytics() {
   const [view, setView] = useState<'weekly' | 'monthly'>('weekly');
 
   useEffect(() => {
-    if (!localStorage.getItem('neurotrack_auth')) { navigate('/auth?mode=login'); return; }
-    setEntries(getEntries());
-    setPredictions(getPredictions());
+    const fetchData = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/auth?mode=login');
+        return;
+      }
+
+      const { data: dbData, error } = await supabase
+        .from('headache_history')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching entries:', error);
+        return;
+      }
+
+      if (dbData) {
+        const mappedEntries: HeadacheEntry[] = dbData.map(row => ({
+          id: row.id,
+          user_id: row.user_id,
+          date: (row.created_at || new Date().toISOString()).split('T')[0],
+          time: new Date(row.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          intensity: row.intensity,
+          location: (row.location?.toLowerCase().includes('front') ? 'front' : 
+                     row.location?.toLowerCase().includes('side') ? 'side' : 
+                     row.location?.toLowerCase().includes('back') ? 'back' : 'whole') as HeadLocation,
+          pain_type: (row.character?.toLowerCase().includes('throbbing') ? 'throbbing' : 
+                      row.character?.toLowerCase().includes('stabbing') ? 'stabbing' : 'pressure') as PainType,
+          duration_minutes: (row.duration || 1) * 60,
+          symptoms: [
+            ...(row.nausea ? ['nausea'] : []),
+            ...(row.vomiting ? ['vomiting'] : []),
+            ...(row.photophobia ? ['light_sensitivity'] : []),
+            ...(row.phonophobia ? ['sound_sensitivity'] : []),
+            ...(row.visual_aura ? ['visual_aura'] : []),
+          ] as Symptom[],
+          sleep_hours: row.age || 7,
+          stress_level: 5,
+          hydration_level: 5,
+          screen_time: 5,
+          triggers: [],
+          created_at: row.created_at
+        }));
+
+        const mappedPredictions: PredictionResult[] = dbData.map(row => ({
+          id: row.id + '_pred',
+          entry_id: row.id,
+          predicted_type: row.predicted_type as HeadacheType,
+          confidence: row.confidence || 0.8,
+          detected_triggers: [],
+          risk_level: (row.risk_level?.toLowerCase() || 'low') as RiskLevel,
+          recommendations: []
+        }));
+
+        setEntries(mappedEntries);
+        setPredictions(mappedPredictions);
+      }
+    };
+    fetchData();
   }, [navigate]);
 
   // Frequency data

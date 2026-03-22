@@ -8,8 +8,21 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 
+import { supabase } from '@/lib/supabase';
+import { useEffect } from 'react';
+
 export default function Auth() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate('/dashboard');
+      }
+    });
+  }, [navigate]);
+
   const [mode, setMode] = useState<'login' | 'signup'>(
     searchParams.get('mode') === 'signup' ? 'signup' : 'login'
   );
@@ -17,28 +30,49 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // Simulate auth — will be replaced with Supabase
-    await new Promise(r => setTimeout(r, 800));
-
-    if (mode === 'signup' && name) {
-      localStorage.setItem('neurotrack_profile', JSON.stringify({ name, email }));
+    try {
+      if (mode === 'signup') {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+            },
+          },
+        });
+        if (error) throw error;
+        toast({
+          title: 'Account created!',
+          description: 'Please check your email for a confirmation link.',
+        });
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        toast({
+          title: 'Welcome back!',
+          description: 'Redirecting to your dashboard...',
+        });
+        setTimeout(() => navigate('/dashboard'), 500);
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Authentication failed',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
     }
-    localStorage.setItem('neurotrack_auth', 'true');
-
-    toast({
-      title: mode === 'login' ? 'Welcome back!' : 'Account created!',
-      description: 'Redirecting to your dashboard...',
-    });
-
-    setTimeout(() => navigate('/dashboard'), 500);
-    setLoading(false);
   };
 
   return (

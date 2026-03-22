@@ -22,6 +22,16 @@ export default function HeadacheTracker() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/auth?mode=login');
+      }
+    };
+    checkAuth();
+  }, [navigate]);
   const [age, setAge] = useState(25);
   const [gender, setGender] = useState('Female');
   const [date, setDate] = useState<Date>(new Date());

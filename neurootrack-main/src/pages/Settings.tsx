@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { getProfile, saveProfile } from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -16,10 +17,17 @@ export default function Settings() {
   const [email, setEmail] = useState('');
 
   useEffect(() => {
-    if (!localStorage.getItem('neurotrack_auth')) { navigate('/auth?mode=login'); return; }
-    const p = getProfile();
-    setName(p.name);
-    setEmail(p.email);
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/auth?mode=login');
+        return;
+      }
+      const p = getProfile();
+      setName(session.user.user_metadata?.full_name || p.name);
+      setEmail(session.user.email || p.email);
+    };
+    checkAuth();
   }, [navigate]);
 
   const handleSave = () => {
@@ -27,8 +35,8 @@ export default function Settings() {
     toast({ title: 'Profile updated', description: 'Your changes have been saved.' });
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('neurotrack_auth');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate('/');
   };
 

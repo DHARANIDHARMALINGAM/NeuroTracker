@@ -27,7 +27,7 @@ serve(async (req) => {
     return new Response('ok', { headers: { 
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-client-info, apikey',
     }});
   }
 

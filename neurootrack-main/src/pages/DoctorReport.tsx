@@ -6,17 +6,78 @@ import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getEntries, getPredictions, getProfile } from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
+import type { HeadLocation, PainType, Symptom, RiskLevel, HeadacheType } from '@/types/headache';
 import { HEADACHE_TYPE_LABELS, TRIGGER_LABELS, type HeadacheEntry, type PredictionResult, type Trigger } from '@/types/headache';
 
 export default function DoctorReport() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<HeadacheEntry[]>([]);
   const [predictions, setPredictions] = useState<PredictionResult[]>([]);
+  const [userName, setUserName] = useState('User');
 
   useEffect(() => {
-    if (!localStorage.getItem('neurotrack_auth')) { navigate('/auth?mode=login'); return; }
-    setEntries(getEntries());
-    setPredictions(getPredictions());
+    const fetchData = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/auth?mode=login');
+        return;
+      }
+      setUserName(session.user.user_metadata?.full_name || 'User');
+
+      const { data: dbData, error } = await supabase
+        .from('headache_history')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching entries:', error);
+        return;
+      }
+
+      if (dbData) {
+        const mappedEntries: HeadacheEntry[] = dbData.map(row => ({
+          id: row.id,
+          user_id: row.user_id,
+          date: (row.created_at || new Date().toISOString()).split('T')[0],
+          time: new Date(row.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          intensity: row.intensity,
+          location: (row.location?.toLowerCase().includes('front') ? 'front' : 
+                     row.location?.toLowerCase().includes('side') ? 'side' : 
+                     row.location?.toLowerCase().includes('back') ? 'back' : 'whole') as HeadLocation,
+          pain_type: (row.character?.toLowerCase().includes('throbbing') ? 'throbbing' : 
+                      row.character?.toLowerCase().includes('stabbing') ? 'stabbing' : 'pressure') as PainType,
+          duration_minutes: (row.duration || 1) * 60,
+          symptoms: [
+            ...(row.nausea ? ['nausea'] : []),
+            ...(row.vomiting ? ['vomiting'] : []),
+            ...(row.photophobia ? ['light_sensitivity'] : []),
+            ...(row.phonophobia ? ['sound_sensitivity'] : []),
+            ...(row.visual_aura ? ['visual_aura'] : []),
+          ] as Symptom[],
+          sleep_hours: row.age || 7,
+          stress_level: 5,
+          hydration_level: 5,
+          screen_time: 5,
+          triggers: [],
+          created_at: row.created_at
+        }));
+
+        const mappedPredictions: PredictionResult[] = dbData.map(row => ({
+          id: row.id + '_pred',
+          entry_id: row.id,
+          predicted_type: row.predicted_type as HeadacheType,
+          confidence: row.confidence || 0.8,
+          detected_triggers: [],
+          risk_level: (row.risk_level?.toLowerCase() || 'low') as RiskLevel,
+          recommendations: []
+        }));
+
+        setEntries(mappedEntries);
+        setPredictions(mappedPredictions);
+      }
+    };
+    fetchData();
   }, [navigate]);
 
   const profile = getProfile();
@@ -51,7 +112,7 @@ export default function DoctorReport() {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, y); y += 6;
-    doc.text(`Patient: ${profile.name}`, 20, y); y += 10;
+    doc.text(`Patient: ${userName}`, 20, y); y += 10;
 
     doc.setDrawColor(200);
     doc.line(20, y, 190, y); y += 10;
@@ -91,10 +152,11 @@ export default function DoctorReport() {
     doc.text('Recent Episodes', 20, y); y += 8;
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    entries.slice(0, 10).forEach(e => {
-      const pred = predictions.find(p => p.entry_id === e.id);
-      doc.text(`${e.date} | Intensity: ${e.intensity}/10 | ${e.duration_minutes}min | ${pred ? HEADACHE_TYPE_LABELS[pred.predicted_type] : 'Unclassified'}`, 20, y);
-      y += 5;
+      entries.slice(0, 10).forEach(e => {
+        const pred = predictions.find(p => p.entry_id === e.id);
+        const typeLabel = pred ? (HEADACHE_TYPE_LABELS[pred.predicted_type as keyof typeof HEADACHE_TYPE_LABELS] || pred.predicted_type) : 'Unclassified';
+        doc.text(`${e.date} | Intensity: ${e.intensity}/10 | ${e.duration_minutes}min | ${typeLabel}`, 20, y);
+        y += 5;
       if (y > 270) { doc.addPage(); y = 20; }
     });
 
@@ -130,7 +192,7 @@ export default function DoctorReport() {
               {[
                 { icon: Activity, label: 'Total Episodes', value: entries.length },
                 { icon: BarChart3, label: 'Avg Severity', value: `${avgSeverity}/10` },
-                { icon: Brain, label: 'Common Type', value: commonType ? HEADACHE_TYPE_LABELS[commonType[0] as keyof typeof HEADACHE_TYPE_LABELS].split(' ')[0] : '—' },
+                { icon: Brain, label: 'Common Type', value: commonType ? (HEADACHE_TYPE_LABELS[commonType[0] as keyof typeof HEADACHE_TYPE_LABELS] || commonType[0]).split(' ')[0] : '—' },
                 { icon: AlertTriangle, label: 'Severe Count', value: sevDist.severe },
               ].map(s => (
                 <Card key={s.label}>
@@ -200,7 +262,7 @@ export default function DoctorReport() {
                         <span className="text-muted-foreground w-24 shrink-0">{e.date}</span>
                         <span className="font-medium">{e.intensity}/10</span>
                         <span className="text-muted-foreground">·</span>
-                        <span>{pred ? HEADACHE_TYPE_LABELS[pred.predicted_type] : 'Unclassified'}</span>
+                        <span>{pred ? (HEADACHE_TYPE_LABELS[pred.predicted_type as keyof typeof HEADACHE_TYPE_LABELS] || pred.predicted_type) : 'Unclassified'}</span>
                       </div>
                     );
                   })}
