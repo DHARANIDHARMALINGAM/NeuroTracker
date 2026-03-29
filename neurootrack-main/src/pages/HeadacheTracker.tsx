@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { CalendarIcon, Save } from 'lucide-react';
+import { CalendarIcon, Save, Cpu, Activity } from 'lucide-react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -46,6 +47,7 @@ export default function HeadacheTracker() {
   const [hydrationLevel, setHydrationLevel] = useState(5);
   const [screenTime, setScreenTime] = useState(6);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
+  const [algorithm, setAlgorithm] = useState<'SVM' | 'Random Forest' | 'Logistic Regression'>('SVM');
 
   const toggleSymptom = (s: Symptom) =>
     setSymptoms(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
@@ -56,7 +58,13 @@ export default function HeadacheTracker() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      // 1. Prepare ML features
+      // 1. Get user authentication state early
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        throw new Error('Please sign in to save your headache data.');
+      }
+
+      // 2. Prepare ML features
       const mlData = {
         age,
         gender,
@@ -65,7 +73,7 @@ export default function HeadacheTracker() {
                        location === 'side' ? 'Temporal' : 
                        location === 'back' ? 'Occipital' : 'Bilateral',
         pain_quality: painType === 'throbbing' ? 'Throbbing' : 
-                      painType === 'stabbing' ? 'Stabbing' : 'Pressing',
+                       painType === 'stabbing' ? 'Stabbing' : 'Pressing',
         duration_hours: duration / 60,
         nausea: symptoms.includes('nausea'),
         vomiting: symptoms.includes('vomiting'),
@@ -88,42 +96,59 @@ export default function HeadacheTracker() {
         medication_response: 'Good'
       };
 
-      // 2. Call Edge Function
+      // 3. Call Edge Function with algorithm selection
       const { data: predictionData, error: predictionError } = await supabase.functions.invoke('predict-headache', {
-        body: mlData
+        body: { data: mlData, algorithm }
       });
 
       if (predictionError) throw predictionError;
 
-      // 3. Save to Database
-      const { data: userData } = await supabase.auth.getUser();
-      
-      const { data: insertedData, error: dbError } = await supabase.from('headache_history').insert({
-        user_id: userData.user?.id || null,
-        age,
-        gender,
-        duration: duration / 60,
-        intensity,
-        location: mlData.pain_location,
-        character: mlData.pain_quality,
-        nausea: mlData.nausea,
-        vomiting: mlData.vomiting,
-        photophobia: mlData.photophobia,
-        phonophobia: mlData.phonophobia,
-        visual_aura: mlData.aura_present,
-        predicted_type: predictionData.prediction,
-        confidence: predictionData.confidence,
-        risk_level: predictionData.risk_level,
-      }).select().single();
+      // 4. Save to Database
+      const { data: insertedData, error: dbError } = await supabase
+        .from('headache_history')
+        .insert({
+          user_id: user.id,
+          age,
+          gender,
+          duration: Math.round(duration / 60) || 1, 
+          intensity,
+          location: mlData.pain_location,
+          character: mlData.pain_quality,
+          nausea: mlData.nausea,
+          vomiting: mlData.vomiting,
+          photophobia: mlData.photophobia,
+          phonophobia: mlData.phonophobia,
+          visual_aura: mlData.aura_present,
+          sleep_hours: sleepHours,
+          stress_level: stressLevel,
+          hydration_level: hydrationLevel,
+          screen_time: screenTime,
+          predicted_type: predictionData.prediction,
+          confidence: parseFloat(predictionData.confidence) || 0,
+          risk_level: predictionData.risk_level,
+          algorithm_used: predictionData.algorithm_used,
+          xai_factors: predictionData.xai_factors
+        })
+        .select()
+        .single();
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error("Database Insert Error:", dbError);
+        throw new Error(dbError.message || 'Failed to save entries to the database');
+      }
 
-      toast({ title: 'Entry saved!', description: `AI Predicted: ${predictionData.prediction}` });
-      navigate(`/prediction/${insertedData.id}`); // Correct navigation
-    } catch (error: any) {
-      console.error(error);
       toast({ 
-        title: 'Error', 
+        title: 'Entry saved!', 
+        description: `AI Predicted: ${predictionData.prediction}` 
+      });
+      
+      if (insertedData) {
+        navigate(`/prediction/${insertedData.id}`);
+      }
+    } catch (error: any) {
+      console.error("Submission Error Details:", error);
+      toast({ 
+        title: 'Form Submission Error', 
         description: error.message || 'Failed to analyze symptoms', 
         variant: 'destructive' 
       });
@@ -131,6 +156,7 @@ export default function HeadacheTracker() {
       setLoading(false);
     }
   };
+
 
   const intensityColor = intensity >= 8 ? 'text-destructive' : intensity >= 5 ? 'text-warning' : 'text-success';
 
@@ -287,6 +313,34 @@ export default function HeadacheTracker() {
                 <Slider value={[item.value]} onValueChange={v => item.set(v[0])} min={item.min} max={item.max} step={1} />
               </div>
             ))}
+          </CardContent>
+        </Card>
+
+        {/* AI Model Selection (Research Mode) */}
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Cpu className="h-4 w-4 text-primary" />
+              AI Analysis Model
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {(['SVM', 'Random Forest', 'Logistic Regression'] as const).map(alg => (
+                <Button 
+                  key={alg} 
+                  type="button" 
+                  size="sm" 
+                  variant={algorithm === alg ? 'default' : 'outline'} 
+                  onClick={() => setAlgorithm(alg)}
+                >
+                  {alg}
+                </Button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-3 uppercase tracking-wider">
+              Note: Different algorithms may yield different clinical insights.
+            </p>
           </CardContent>
         </Card>
 

@@ -12,6 +12,7 @@ import Analytics from "./pages/Analytics";
 import DoctorReport from "./pages/DoctorReport";
 import DoctorFinder from "./pages/DoctorFinder";
 import Settings from "./pages/Settings";
+import Research from "./pages/Research";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
           <Route path="/report" element={<DoctorReport />} />
           <Route path="/doctor-finder" element={<DoctorFinder />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/research" element={<Research />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

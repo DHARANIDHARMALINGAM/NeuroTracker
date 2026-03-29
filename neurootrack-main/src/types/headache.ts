@@ -6,8 +6,10 @@ export type Trigger = 'lack_of_sleep' | 'dehydration' | 'stress' | 'weather_chan
 export interface HeadacheEntry {
   id: string;
   user_id: string;
+  age: number;
+  gender: 'Male' | 'Female' | 'Other';
   date: string;
-  time: string;
+  time?: string;
   intensity: number;
   location: HeadLocation;
   pain_type: PainType;
@@ -18,10 +20,15 @@ export interface HeadacheEntry {
   hydration_level: number;
   screen_time: number;
   triggers: Trigger[];
+  predicted_type?: string;
+  confidence?: number;
+  risk_level?: RiskLevel;
+  algorithm_used?: string;
+  xai_factors?: Record<string, number>;
   created_at: string;
 }
 
-export type HeadacheType = 'migraine_with_aura' | 'migraine_without_aura' | 'tension' | 'cluster';
+export type HeadacheType = 'migraine_with_aura' | 'migraine_without_aura' | 'tension' | 'cluster' | string;
 
 export type RiskLevel = 'low' | 'moderate' | 'high' | 'severe';
 
@@ -30,8 +37,32 @@ export interface PredictionResult {
   entry_id: string;
   predicted_type: HeadacheType;
   confidence: number;
-  detected_triggers: string[];
+  xai_factors: Record<string, number>;
+  algorithm_used: AlgorithmType;
   risk_level: RiskLevel;
+  recommendations: string[];
+}
+
+export type AlgorithmType = 'SVM' | 'Random Forest' | 'Logistic Regression' | 'KNN';
+
+export interface MLModelMetrics {
+  id: string;
+  name: AlgorithmType;
+  accuracy: number;
+  precision_score: number;
+  recall_score: number;
+  f1_score: number;
+  confusion_matrix: number[][];
+  last_trained: string;
+}
+
+export interface RiskPrediction {
+  id: string;
+  user_id: string;
+  prediction_date: string;
+  risk_score: number;
+  risk_level: RiskLevel;
+  top_triggers: string[];
   recommendations: string[];
 }
 
@@ -43,7 +74,7 @@ export interface Insight {
   type: 'info' | 'warning' | 'success';
 }
 
-export const HEADACHE_TYPE_LABELS: Record<HeadacheType, string> = {
+export const HEADACHE_TYPE_LABELS: Record<string, string> = {
   migraine_with_aura: 'Migraine with Aura',
   migraine_without_aura: 'Migraine without Aura',
   tension: 'Tension Headache',

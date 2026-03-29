@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Brain, AlertTriangle, CheckCircle, ArrowRight, Lightbulb, Loader2 } from 'lucide-react';
+import { Brain, AlertTriangle, CheckCircle, ArrowRight, Lightbulb, Loader2, Info } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import Layout from '@/components/Layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
-import { HEADACHE_TYPE_LABELS, RISK_LEVEL_LABELS } from '@/types/headache';
-import type { HeadacheEntry, PredictionResult, RiskLevel, HeadacheType } from '@/types/headache';
 
 export default function PredictionResults() {
   const { entryId } = useParams();
@@ -23,7 +23,7 @@ export default function PredictionResults() {
           .select('*')
           .eq('id', entryId)
           .single();
-        
+
         if (error) throw error;
         setData(data);
       } catch (error) {
@@ -71,9 +71,15 @@ export default function PredictionResults() {
     severe: 'bg-red-500/10 text-red-500 border-red-500/30',
   };
 
+  const xaiData = data.xai_factors ? Object.entries(data.xai_factors).map(([name, value]) => ({
+    name: name.replace('_', ' '),
+    value: Math.abs(value as number),
+    original: value
+  })).sort((a, b) => b.value - a.value) : [];
+
   return (
     <Layout>
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6 pb-20">
         <div className="text-center">
           <motion.div
             initial={{ scale: 0 }}
@@ -83,52 +89,101 @@ export default function PredictionResults() {
           >
             <Brain className="h-8 w-8 text-primary-foreground" />
           </motion.div>
-          <h1 className="font-display text-2xl md:text-3xl font-bold">AI Analysis Complete</h1>
+          <h1 className="font-display text-2xl md:text-3xl font-bold">AI Neuro-Analysis Complete</h1>
           <p className="text-muted-foreground mt-1">
-            Based on your symptoms from {new Date(data.created_at).toLocaleDateString()}
+            Processed via <Badge variant="secondary" className="ml-1">{data.algorithm_used || 'SVM'}</Badge> engine
           </p>
         </div>
 
-        {/* Predicted Type */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <Card className="border-2 border-primary/20">
-            <CardContent className="p-6 text-center">
-              <p className="text-sm text-muted-foreground mb-1">Predicted Headache Type</p>
-              <h2 className="font-display text-2xl font-bold text-primary mb-2">
-                {data.predicted_type}
-              </h2>
-              <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                {typeDescriptions[data.predicted_type] || 'Consult a specialist for more information.'}
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2 space-y-6">
+            {/* Predicted Type */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <Card className="border-2 border-primary/20 bg-primary/5">
+                <CardContent className="p-6 text-center">
+                  <p className="text-sm text-muted-foreground mb-1 uppercase font-bold tracking-wider">Primary Diagnosis Forecast</p>
+                  <h2 className="font-display text-3xl font-bold text-primary mb-3">
+                    {data.predicted_type}
+                  </h2>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {typeDescriptions[data.predicted_type] || 'Consult a specialist for more information.'}
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-        {/* Confidence & Risk */}
-        <div className="grid grid-cols-2 gap-4">
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+            {/* Explainable AI (XAI) Factors */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center justify-between">
+                    Explainable AI (XAI) Insights
+                    <Badge variant="outline" className="text-[10px] uppercase">Clinical Transparency</Badge>
+                  </CardTitle>
+                  <CardDescription>Factors that most influenced this specific prediction.</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[250px]">
+                  {xaiData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={xaiData} layout="vertical" margin={{ left: 20, right: 30 }}>
+                        <XAxis type="number" hide />
+                        <YAxis dataKey="name" type="category" width={100} fontSize={12} />
+                        <Tooltip
+                          cursor={{ fill: 'transparent' }}
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              return (
+                                <div className="bg-white p-2 border rounded-lg shadow-sm text-xs">
+                                  <p className="font-bold">{payload[0].payload.name}</p>
+                                  <p>Contribution: {payload[0].value}%</p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
+                          {xaiData.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={entry.original > 0 ? '#3b82f6' : '#ef4444'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                      <Info className="h-8 w-8 mb-2 opacity-20" />
+                      <p className="text-sm italic">Feature importance analysis not available for this entry.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
+
+          <div className="space-y-6">
+            {/* Confidence Score */}
             <Card>
               <CardContent className="p-6 text-center">
-                <p className="text-sm text-muted-foreground mb-2">Confidence Score</p>
-                <div className="relative w-20 h-20 mx-auto mb-2">
+                <p className="text-sm text-muted-foreground mb-4">Model Confidence</p>
+                <div className="relative w-24 h-24 mx-auto mb-2">
                   <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                    <circle cx="50" cy="50" r="40" stroke="currentColor" className="text-secondary" strokeWidth="8" fill="none" />
-                    <circle cx="50" cy="50" r="40" stroke="currentColor" className="text-primary" strokeWidth="8" fill="none"
+                    <circle cx="50" cy="50" r="40" stroke="currentColor" className="text-secondary/20" strokeWidth="10" fill="none" />
+                    <circle cx="50" cy="50" r="40" stroke="currentColor" className="text-primary" strokeWidth="10" fill="none"
                       strokeDasharray={`${(data.confidence || 0) * 2.51} 251`} strokeLinecap="round" />
                   </svg>
-                  <span className="absolute inset-0 flex items-center justify-center font-display font-bold text-lg">
+                  <span className="absolute inset-0 flex items-center justify-center font-display font-bold text-xl">
                     {Math.round(data.confidence || 0)}%
                   </span>
                 </div>
+                <p className="text-[10px] text-muted-foreground mt-2 uppercase tracking-tighter">Reliability Index</p>
               </CardContent>
             </Card>
-          </motion.div>
 
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+            {/* Risk Level */}
             <Card>
               <CardContent className="p-6 text-center">
-                <p className="text-sm text-muted-foreground mb-2">Risk Level</p>
-                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold ${riskColors[data.risk_level] || riskColors.low}`}>
+                <p className="text-sm text-muted-foreground mb-4">Risk Level</p>
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold mb-2 ${riskColors[data.risk_level] || riskColors.low}`}>
                   {data.risk_level === 'high' || data.risk_level === 'severe' ? (
                     <AlertTriangle className="h-4 w-4" />
                   ) : (
@@ -136,9 +191,10 @@ export default function PredictionResults() {
                   )}
                   {data.risk_level?.toUpperCase() || 'LOW'}
                 </div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-tighter shrink-0">Priority Assessment</p>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
         </div>
 
         {/* Recommendations */}

@@ -13,7 +13,8 @@ const navItems = [
   { path: '/tracker', label: 'Track' },
   { path: '/analytics', label: 'Analytics' },
   { path: '/report', label: 'Report' },
-  { path: '/doctor-finder', label: 'Find Doctor' },
+  { path: '/doctor-finder', label: 'Clinical Toolkit' },
+  { path: '/research', label: 'Research' },
   { path: '/settings', label: 'Settings' },
 ];
 

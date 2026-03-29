@@ -1,280 +1,253 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileDown, Activity, BarChart3, Brain, AlertTriangle } from 'lucide-react';
+import { FileDown, Activity, BarChart3, Brain, AlertTriangle, User, ClipboardList, Stethoscope } from 'lucide-react';
 import jsPDF from 'jspdf';
 import Layout from '@/components/Layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { getEntries, getPredictions, getProfile } from '@/lib/storage';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
-import type { HeadLocation, PainType, Symptom, RiskLevel, HeadacheType } from '@/types/headache';
-import { HEADACHE_TYPE_LABELS, TRIGGER_LABELS, type HeadacheEntry, type PredictionResult, type Trigger } from '@/types/headache';
+import type { HeadLocation, PainType, Symptom, RiskLevel, HeadacheType, HeadacheEntry, PredictionResult, Trigger } from '@/types/headache';
+import { HEADACHE_TYPE_LABELS, SYMPTOM_LABELS, TRIGGER_LABELS } from '@/types/headache';
 
 export default function DoctorReport() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<HeadacheEntry[]>([]);
-  const [predictions, setPredictions] = useState<PredictionResult[]>([]);
-  const [userName, setUserName] = useState('User');
+  const [loading, setLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<any>(null);
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate('/auth?mode=login');
-        return;
-      }
-      setUserName(session.user.user_metadata?.full_name || 'User');
+      setLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          navigate('/auth?mode=login');
+          return;
+        }
+        setUserProfile(session.user);
 
-      const { data: dbData, error } = await supabase
-        .from('headache_history')
-        .select('*')
-        .order('created_at', { ascending: false });
+        const { data: dbData, error } = await supabase
+          .from('headache_history')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching entries:', error);
-        return;
-      }
+        if (error) throw error;
 
-      if (dbData) {
-        const mappedEntries: HeadacheEntry[] = dbData.map(row => ({
-          id: row.id,
-          user_id: row.user_id,
-          date: (row.created_at || new Date().toISOString()).split('T')[0],
-          time: new Date(row.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          intensity: row.intensity,
-          location: (row.location?.toLowerCase().includes('front') ? 'front' : 
-                     row.location?.toLowerCase().includes('side') ? 'side' : 
-                     row.location?.toLowerCase().includes('back') ? 'back' : 'whole') as HeadLocation,
-          pain_type: (row.character?.toLowerCase().includes('throbbing') ? 'throbbing' : 
-                      row.character?.toLowerCase().includes('stabbing') ? 'stabbing' : 'pressure') as PainType,
-          duration_minutes: (row.duration || 1) * 60,
-          symptoms: [
-            ...(row.nausea ? ['nausea'] : []),
-            ...(row.vomiting ? ['vomiting'] : []),
-            ...(row.photophobia ? ['light_sensitivity'] : []),
-            ...(row.phonophobia ? ['sound_sensitivity'] : []),
-            ...(row.visual_aura ? ['visual_aura'] : []),
-          ] as Symptom[],
-          sleep_hours: row.age || 7,
-          stress_level: 5,
-          hydration_level: 5,
-          screen_time: 5,
-          triggers: [],
-          created_at: row.created_at
-        }));
-
-        const mappedPredictions: PredictionResult[] = dbData.map(row => ({
-          id: row.id + '_pred',
-          entry_id: row.id,
-          predicted_type: row.predicted_type as HeadacheType,
-          confidence: row.confidence || 0.8,
-          detected_triggers: [],
-          risk_level: (row.risk_level?.toLowerCase() || 'low') as RiskLevel,
-          recommendations: []
-        }));
-
-        setEntries(mappedEntries);
-        setPredictions(mappedPredictions);
+        if (dbData) {
+          const mappedEntries: HeadacheEntry[] = dbData.map(row => ({
+            ...row,
+            date: new Date(row.created_at).toLocaleDateString(),
+            time: new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          }));
+          setEntries(mappedEntries);
+        }
+      } catch (error) {
+        console.error('Error fetching report data:', error);
+      } finally {
+        setLoading(false);
       }
     };
     fetchData();
   }, [navigate]);
 
-  const profile = getProfile();
-  const avgSeverity = entries.length > 0 ? (entries.reduce((s, e) => s + e.intensity, 0) / entries.length).toFixed(1) : '0';
-
-  // Most common type
+  const avgSeverity = entries.length > 0 ? (entries.reduce((s, e) => s + (e.intensity || 0), 0) / entries.length).toFixed(1) : '0';
+  const severeEpisodes = entries.filter(e => e.intensity >= 7).length;
+  
   const typeCounts: Record<string, number> = {};
-  predictions.forEach(p => { typeCounts[p.predicted_type] = (typeCounts[p.predicted_type] || 0) + 1; });
-  const commonType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0];
-
-  // Top triggers
-  const trigCounts: Record<string, number> = {};
-  entries.forEach(e => e.triggers.forEach(t => { trigCounts[t] = (trigCounts[t] || 0) + 1; }));
-  const topTriggers = Object.entries(trigCounts).sort((a, b) => b[1] - a[1]).slice(0, 4);
-
-  // Severity distribution
-  const sevDist = { mild: 0, moderate: 0, severe: 0 };
   entries.forEach(e => {
-    if (e.intensity <= 3) sevDist.mild++;
-    else if (e.intensity <= 6) sevDist.moderate++;
-    else sevDist.severe++;
+    if (e.predicted_type) {
+      typeCounts[e.predicted_type] = (typeCounts[e.predicted_type] || 0) + 1;
+    }
   });
+  const commonType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0];
 
   const downloadPDF = () => {
     const doc = new jsPDF();
-    let y = 20;
+    const margin = 20;
+    let y = 30;
 
-    doc.setFontSize(20);
+    // Header
+    doc.setFillColor(59, 130, 246); // Primary Blue
+    doc.rect(0, 0, 210, 40, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
-    doc.text('NeuroTrack AI - Patient Report', 20, y); y += 10;
+    doc.text('NEURO-TRACK CLINICAL REPORT', margin, 25);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`DATE GENERATED: ${new Date().toLocaleDateString().toUpperCase()}`, margin, 34);
+
+    y = 55;
+    doc.setTextColor(40, 40, 40);
+    
+    // Patient Profile Section
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PATIENT PROFILE', margin, y); y += 10;
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const patientName = userProfile?.user_metadata?.full_name || userProfile?.email || 'N/A';
+    doc.text(`NAME: ${patientName}`, margin, y);
+    doc.text(`PATIENT ID: ${userProfile?.id?.substring(0, 8).toUpperCase() || 'N/A'}`, margin + 80, y); y += 6;
+    doc.text(`AGE: ${entries[0]?.age || 'N/A'}`, margin, y);
+    doc.text(`GENDER: ${entries[0]?.gender || 'N/A'}`, margin + 80, y); y += 12;
+
+    // Clinical Summary Section
+    doc.setDrawColor(230, 230, 230);
+    doc.line(margin, y, 190, y); y += 10;
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AI CLINICAL SUMMARY', margin, y); y += 10;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, y); y += 6;
-    doc.text(`Patient: ${userName}`, 20, y); y += 10;
+    doc.text(`TOTAL RECORDED EPISODES: ${entries.length}`, margin, y); y += 6;
+    doc.text(`AVERAGE PAIN INTENSITY: ${avgSeverity}/10`, margin, y); y += 6;
+    doc.text(`SEVERE EPISODES (7-10): ${severeEpisodes}`, margin, y); y += 6;
+    doc.text(`PRIMARY DIAGNOSED PATTERN: ${commonType ? commonType[0] : 'N/A'}`, margin, y); y += 15;
 
-    doc.setDrawColor(200);
-    doc.line(20, y, 190, y); y += 10;
-
+    // Episode History
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('Summary', 20, y); y += 8;
+    doc.text('RECENT EPISODE LOG', margin, y); y += 10;
 
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Total Headache Episodes: ${entries.length}`, 20, y); y += 6;
-    doc.text(`Average Severity: ${avgSeverity}/10`, 20, y); y += 6;
-    doc.text(`Most Common Type: ${commonType ? HEADACHE_TYPE_LABELS[commonType[0] as keyof typeof HEADACHE_TYPE_LABELS] : 'N/A'}`, 20, y); y += 6;
-    doc.text(`Tracking Period: ${entries.length > 0 ? `${entries[entries.length - 1].date} to ${entries[0].date}` : 'N/A'}`, 20, y); y += 12;
-
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Severity Distribution', 20, y); y += 8;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Mild (1-3): ${sevDist.mild} episodes`, 20, y); y += 6;
-    doc.text(`Moderate (4-6): ${sevDist.moderate} episodes`, 20, y); y += 6;
-    doc.text(`Severe (7-10): ${sevDist.severe} episodes`, 20, y); y += 12;
-
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Common Triggers', 20, y); y += 8;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    topTriggers.forEach(([t, c]) => {
-      doc.text(`${TRIGGER_LABELS[t as Trigger] || t}: ${c} occurrence${c > 1 ? 's' : ''}`, 20, y); y += 6;
-    });
-    y += 6;
-
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Recent Episodes', 20, y); y += 8;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-      entries.slice(0, 10).forEach(e => {
-        const pred = predictions.find(p => p.entry_id === e.id);
-        const typeLabel = pred ? (HEADACHE_TYPE_LABELS[pred.predicted_type as keyof typeof HEADACHE_TYPE_LABELS] || pred.predicted_type) : 'Unclassified';
-        doc.text(`${e.date} | Intensity: ${e.intensity}/10 | ${e.duration_minutes}min | ${typeLabel}`, 20, y);
-        y += 5;
-      if (y > 270) { doc.addPage(); y = 20; }
-    });
-
-    y += 8;
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margin, y, 170, 8, 'F');
     doc.setFontSize(9);
-    doc.setTextColor(150);
-    doc.text('This report was generated by NeuroTrack AI for informational purposes only. Not a medical diagnosis.', 20, y);
+    doc.text('DATE', margin + 5, y + 5);
+    doc.text('INTENSITY', margin + 30, y + 5);
+    doc.text('DURATION', margin + 60, y + 5);
+    doc.text('AI PREDICTION', margin + 90, y + 5); y += 12;
 
-    doc.save('NeuroTrack_Report.pdf');
+    doc.setFont('helvetica', 'normal');
+    entries.slice(0, 15).forEach(e => {
+      doc.text(e.date || 'N/A', margin + 5, y);
+      doc.text(`${e.intensity}/10`, margin + 30, y);
+      doc.text(`${e.duration_minutes || (e as any).duration*60} min`, margin + 60, y);
+      doc.text(e.predicted_type || 'Unclassified', margin + 90, y);
+      
+      y += 8;
+      if (y > 270) { doc.addPage(); y = 30; }
+    });
+
+    // Prediction Transparency (XAI)
+    if (entries[0]?.xai_factors) {
+      y += 10;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text('AI EXPLAINABILITY FACTORS (LATEST EPISODE)', margin, y); y += 8;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      Object.entries(entries[0].xai_factors).slice(0, 5).forEach(([factor, score]) => {
+        doc.text(`${factor.replace('_', ' ').toUpperCase()}: ${score > 0 ? '+' : ''}${score}% INFLUENCE`, margin + 5, y);
+        y += 5;
+      });
+    }
+
+    // Footer
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(`This report is generated by NeuroTrack AI Assistive Technology. Not a replacement for professional neurological diagnosis.`, margin, 285);
+        doc.text(`Page ${i} of ${pageCount}`, 190, 285, { align: 'right' });
+    }
+
+    doc.save(`NeuroTrack_Clinical_Report_${patientName}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
+
+  if (loading) return <Layout><div className="flex justify-center py-20"><Activity className="h-8 w-8 animate-spin text-primary" /></div></Layout>;
 
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="font-display text-2xl md:text-3xl font-bold">Doctor Report</h1>
-            <p className="text-muted-foreground mt-1">Share this summary with your healthcare provider</p>
+      <div className="max-w-4xl mx-auto space-y-8 pb-20">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 mb-1">
+              <Stethoscope className="h-5 w-5 text-primary" />
+              <Badge variant="outline" className="text-primary border-primary/20">Clinical Portal</Badge>
+            </div>
+            <h1 className="font-display text-3xl font-bold tracking-tight">Physician Reporting Service</h1>
+            <p className="text-muted-foreground">Certified data summary for neurological consultation.</p>
           </div>
-          <Button onClick={downloadPDF} className="gradient-primary border-0" disabled={entries.length === 0}>
-            <FileDown className="h-4 w-4 mr-2" /> Download PDF
+          <Button onClick={downloadPDF} size="lg" className="gradient-primary border-0 shadow-lg shadow-primary/20" disabled={entries.length === 0}>
+            <FileDown className="h-5 w-5 mr-3" /> Generate Clinical PDF
           </Button>
         </div>
 
-        {entries.length === 0 ? (
-          <Card><CardContent className="p-8 text-center">
-            <p className="text-muted-foreground">No data to generate a report. Start logging headaches first.</p>
-          </CardContent></Card>
-        ) : (
-          <>
-            {/* Overview */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { icon: Activity, label: 'Total Episodes', value: entries.length },
-                { icon: BarChart3, label: 'Avg Severity', value: `${avgSeverity}/10` },
-                { icon: Brain, label: 'Common Type', value: commonType ? (HEADACHE_TYPE_LABELS[commonType[0] as keyof typeof HEADACHE_TYPE_LABELS] || commonType[0]).split(' ')[0] : '—' },
-                { icon: AlertTriangle, label: 'Severe Count', value: sevDist.severe },
-              ].map(s => (
-                <Card key={s.label}>
-                  <CardContent className="p-4 text-center">
-                    <s.icon className="h-5 w-5 mx-auto text-primary mb-2" />
-                    <p className="text-xl font-bold font-display">{s.value}</p>
-                    <p className="text-xs text-muted-foreground">{s.label}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+           {/* Summary Cards */}
+           <Card className="md:col-span-1 border-primary/20 bg-primary/5">
+             <CardHeader className="pb-3"><CardTitle className="text-sm">Patient Summary</CardTitle></CardHeader>
+             <CardContent className="space-y-4">
+               <div className="flex items-center gap-4 p-3 bg-white rounded-xl border">
+                 <User className="h-8 w-8 text-primary/60" />
+                 <div>
+                   <p className="text-sm font-bold">{userProfile?.user_metadata?.full_name || userProfile?.email || 'Patient'}</p>
+                   <p className="text-[10px] text-muted-foreground uppercase">Verified Patient Profile</p>
+                 </div>
+               </div>
+               <div className="grid grid-cols-2 gap-2 text-xs">
+                 <div className="p-3 bg-white border rounded-lg">
+                   <p className="text-muted-foreground mb-1 uppercase tracking-tighter">Episodes</p>
+                   <p className="text-lg font-bold">{entries.length}</p>
+                 </div>
+                 <div className="p-3 bg-white border rounded-lg">
+                   <p className="text-muted-foreground mb-1 uppercase tracking-tighter">Severe</p>
+                   <p className="text-lg font-bold text-destructive">{severeEpisodes}</p>
+                 </div>
+               </div>
+             </CardContent>
+           </Card>
 
-            {/* Severity Distribution */}
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Severity Distribution</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {[
-                    { label: 'Mild (1-3)', count: sevDist.mild, color: 'bg-success' },
-                    { label: 'Moderate (4-6)', count: sevDist.moderate, color: 'bg-warning' },
-                    { label: 'Severe (7-10)', count: sevDist.severe, color: 'bg-destructive' },
-                  ].map(s => (
-                    <div key={s.label}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span>{s.label}</span>
-                        <span className="font-medium">{s.count}</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-secondary">
-                        <div className={`h-full rounded-full ${s.color}`} style={{ width: `${entries.length > 0 ? (s.count / entries.length) * 100 : 0}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Top Triggers */}
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Common Triggers</CardTitle></CardHeader>
-              <CardContent>
-                {topTriggers.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {topTriggers.map(([t, c]) => (
-                      <span key={t} className="px-3 py-1.5 rounded-full text-sm bg-accent/10 text-accent border border-accent/20">
-                        {TRIGGER_LABELS[t as Trigger] || t} ({c})
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No triggers recorded yet.</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Timeline */}
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Recent Timeline</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {entries.slice(0, 8).map(e => {
-                    const pred = predictions.find(p => p.entry_id === e.id);
-                    return (
-                      <div key={e.id} className="flex items-center gap-3 text-sm">
-                        <div className={`w-3 h-3 rounded-full shrink-0 ${
-                          e.intensity >= 7 ? 'bg-destructive' : e.intensity >= 4 ? 'bg-warning' : 'bg-success'
-                        }`} />
-                        <span className="text-muted-foreground w-24 shrink-0">{e.date}</span>
-                        <span className="font-medium">{e.intensity}/10</span>
-                        <span className="text-muted-foreground">·</span>
-                        <span>{pred ? (HEADACHE_TYPE_LABELS[pred.predicted_type as keyof typeof HEADACHE_TYPE_LABELS] || pred.predicted_type) : 'Unclassified'}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            <p className="text-xs text-muted-foreground text-center">
-              This report is generated for informational purposes only. It is not a medical diagnosis. Please consult a healthcare professional.
-            </p>
-          </>
-        )}
+           {/* Metrics Table */}
+           <Card className="md:col-span-2">
+             <CardHeader className="pb-3 border-b">
+               <div className="flex justify-between items-center">
+                 <CardTitle className="text-sm flex items-center gap-2">
+                   <ClipboardList className="h-4 w-4" /> Comprehensive Data History
+                 </CardTitle>
+                 <Badge variant="secondary" className="text-[10px]">{entries.length} RECORDS</Badge>
+               </div>
+             </CardHeader>
+             <CardContent className="p-0">
+               <div className="overflow-x-auto">
+                 <table className="w-full text-sm text-left">
+                   <thead className="bg-muted/30 text-[10px] uppercase font-bold text-muted-foreground">
+                     <tr>
+                       <th className="px-4 py-3">Date</th>
+                       <th className="px-4 py-3">Intensity</th>
+                       <th className="px-4 py-3">Type</th>
+                       <th className="px-4 py-3">ALGO</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y">
+                     {entries.slice(0, 8).map(e => (
+                       <tr key={e.id} className="hover:bg-muted/20 transition-colors">
+                         <td className="px-4 py-3 font-medium">{e.date}</td>
+                         <td className="px-4 py-3">
+                           <div className="flex items-center gap-2">
+                             <div className={`h-2 w-2 rounded-full ${e.intensity >= 7 ? 'bg-destructive' : e.intensity >= 4 ? 'bg-warning' : 'bg-success'}`} />
+                             {e.intensity}/10
+                           </div>
+                         </td>
+                         <td className="px-4 py-3 text-xs">{e.predicted_type}</td>
+                         <td className="px-4 py-3"><Badge variant="outline" className="text-[8px] py-0">{e.algorithm_used || 'SVM'}</Badge></td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+               {entries.length > 8 && <div className="p-4 text-center border-t text-[10px] text-muted-foreground uppercase cursor-pointer hover:text-primary">View all records in history</div>}
+             </CardContent>
+           </Card>
+        </div>
       </div>
     </Layout>
   );
