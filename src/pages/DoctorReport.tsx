@@ -30,6 +30,7 @@ export default function DoctorReport() {
         const { data: dbData, error } = await supabase
           .from('headache_history')
           .select('*')
+          .eq('user_id', session.user.id)
           .order('created_at', { ascending: false });
 
         if (error) throw error;

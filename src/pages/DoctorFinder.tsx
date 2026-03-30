@@ -28,9 +28,16 @@ export default function ClinicalToolkit() {
   useEffect(() => {
     const fetchLatest = async () => {
       setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setLoading(false);
+        return;
+      }
+      
       const { data, error } = await supabase
         .from('headache_history')
         .select('*')
+        .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();

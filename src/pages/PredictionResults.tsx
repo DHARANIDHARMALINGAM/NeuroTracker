@@ -18,10 +18,17 @@ export default function PredictionResults() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setLoading(false);
+          return;
+        }
+
         const { data, error } = await supabase
           .from('headache_history')
           .select('*')
           .eq('id', entryId)
+          .eq('user_id', session.user.id)
           .single();
 
         if (error) throw error;
