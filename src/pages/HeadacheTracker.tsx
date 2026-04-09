@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { CalendarIcon, Save, Cpu, Activity } from 'lucide-react';
+import { CalendarIcon, Save, Activity } from 'lucide-react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,7 @@ export default function HeadacheTracker() {
   const [hydrationLevel, setHydrationLevel] = useState(5);
   const [screenTime, setScreenTime] = useState(6);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
-  const [algorithm, setAlgorithm] = useState<'SVM' | 'Random Forest' | 'Logistic Regression'>('SVM');
+
 
   const toggleSymptom = (s: Symptom) =>
     setSymptoms(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
@@ -98,7 +98,7 @@ export default function HeadacheTracker() {
 
       // 3. Call Edge Function with algorithm selection
       const { data: predictionData, error: predictionError } = await supabase.functions.invoke('predict-headache', {
-        body: { data: mlData, algorithm }
+        body: { data: mlData, algorithm: 'SVM' }
       });
 
       if (predictionError) throw predictionError;
@@ -316,33 +316,6 @@ export default function HeadacheTracker() {
           </CardContent>
         </Card>
 
-        {/* AI Model Selection (Research Mode) */}
-        <Card className="border-primary/30 bg-primary/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Cpu className="h-4 w-4 text-primary" />
-              AI Analysis Model
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {(['SVM', 'Random Forest', 'Logistic Regression'] as const).map(alg => (
-                <Button 
-                  key={alg} 
-                  type="button" 
-                  size="sm" 
-                  variant={algorithm === alg ? 'default' : 'outline'} 
-                  onClick={() => setAlgorithm(alg)}
-                >
-                  {alg}
-                </Button>
-              ))}
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-3 uppercase tracking-wider">
-              Note: Different algorithms may yield different clinical insights.
-            </p>
-          </CardContent>
-        </Card>
 
         {/* Triggers */}
         <Card>

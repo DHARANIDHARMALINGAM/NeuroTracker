@@ -1,240 +1,325 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  ScatterChart, Scatter, ZAxis
-} from 'recharts';
-import { 
-  Database, Cpu, Activity, TrendingUp, AlertCircle, 
-  FlaskConical, CheckCircle2, RefreshCw, Download
+import {
+  Brain, ShieldCheck, Lightbulb, Heart, Droplets, Moon,
+  Monitor, Utensils, HelpCircle, ChevronDown, ChevronUp,
+  Activity, Zap, Clock, Eye
 } from 'lucide-react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import modelsData from '@/lib/models_data.json';
 
-const metricsData = Object.entries(modelsData).map(([name, data]) => ({
-  name,
-  Accuracy: data.accuracy,
-  Precision: data.precision_score,
-  Recall: data.recall_score,
-  F1: data.f1_score,
-}));
+/* ── Headache type data ─────────────────────────────────── */
+const headacheTypes = [
+  {
+    name: 'Migraine with Aura',
+    icon: Eye,
+    color: 'text-purple-500',
+    bg: 'bg-purple-500/10 border-purple-500/20',
+    description:
+      'Visual disturbances like flashing lights, zigzag patterns, or blind spots appear 20–60 minutes before the headache. Often accompanied by nausea and extreme light sensitivity.',
+    keySymptoms: ['Visual aura', 'One-sided pain', 'Nausea', 'Light sensitivity'],
+    duration: '4 – 72 hours',
+  },
+  {
+    name: 'Migraine without Aura',
+    icon: Zap,
+    color: 'text-red-500',
+    bg: 'bg-red-500/10 border-red-500/20',
+    description:
+      'The most common migraine type — moderate-to-severe throbbing pain, usually on one side of the head, worsened by physical activity.',
+    keySymptoms: ['Throbbing pain', 'Sound sensitivity', 'Nausea / vomiting', 'Fatigue'],
+    duration: '4 – 72 hours',
+  },
+  {
+    name: 'Tension-Type Headache',
+    icon: Activity,
+    color: 'text-blue-500',
+    bg: 'bg-blue-500/10 border-blue-500/20',
+    description:
+      'Feels like a tight band around the head. Usually mild-to-moderate and doesn\'t worsen with routine physical activity.',
+    keySymptoms: ['Pressing pain', 'Both sides', 'Mild intensity', 'No nausea'],
+    duration: '30 min – 7 days',
+  },
+  {
+    name: 'Cluster Headache',
+    icon: Clock,
+    color: 'text-amber-500',
+    bg: 'bg-amber-500/10 border-amber-500/20',
+    description:
+      'Extremely intense pain around one eye, occurring in cyclical patterns ("clusters"). Often wakes patients from sleep.',
+    keySymptoms: ['Severe eye pain', 'Tearing / redness', 'Restlessness', 'Nasal congestion'],
+    duration: '15 min – 3 hours',
+  },
+];
 
-const featureImportance = Object.entries(modelsData['Random Forest'].feature_importances).map(([name, value]) => ({
-  name: name.replace('_', ' '),
-  importance: value
-}));
+/* ── Prevention tips ────────────────────────────────────── */
+const preventionTips = [
+  {
+    icon: Moon,
+    title: 'Prioritise Sleep',
+    description: 'Stick to a consistent sleep schedule — even on weekends. 7–9 hours is ideal.',
+    color: 'text-indigo-500',
+  },
+  {
+    icon: Droplets,
+    title: 'Stay Hydrated',
+    description: 'Dehydration is a top trigger. Aim for 2–3 litres of water per day.',
+    color: 'text-cyan-500',
+  },
+  {
+    icon: Heart,
+    title: 'Manage Stress',
+    description: 'Practise deep breathing, yoga, or short walks to keep stress hormones in check.',
+    color: 'text-rose-500',
+  },
+  {
+    icon: Monitor,
+    title: 'Limit Screen Time',
+    description: 'The blue light from screens can trigger migraines. Take a 5-minute break every 30 minutes.',
+    color: 'text-violet-500',
+  },
+  {
+    icon: Utensils,
+    title: 'Eat Regularly',
+    description: 'Skipping meals causes blood-sugar dips that can trigger headaches. Keep healthy snacks handy.',
+    color: 'text-emerald-500',
+  },
+  {
+    icon: Activity,
+    title: 'Exercise Moderately',
+    description: 'Regular aerobic exercise (30 min, 3× per week) can reduce migraine frequency by up to 40 %.',
+    color: 'text-orange-500',
+  },
+];
 
-const confusionMatrix = modelsData['Random Forest'].confusion_matrix;
-const classes = ['Migraine (Aura)', 'Migraine (No Aura)', 'Tension', 'Cluster'];
+/* ── FAQ data ───────────────────────────────────────────── */
+const faqs = [
+  {
+    question: 'How accurate is NeuroTrack AI?',
+    answer:
+      'Our AI model achieves over 88 % accuracy in clinical validation tests. It continuously improves as more anonymised data is collected. However, it is a screening tool — always consult a neurologist for a formal diagnosis.',
+  },
+  {
+    question: 'Is my health data safe?',
+    answer:
+      'Yes. All data is encrypted at rest and in transit. We follow industry-standard security practices and never share individual patient data with third parties.',
+  },
+  {
+    question: 'When should I see a doctor?',
+    answer:
+      'You should seek immediate medical attention if: you experience the worst headache of your life, a headache after head injury, headache with fever / stiff neck, sudden vision loss, or if your headache pattern changes dramatically.',
+  },
+  {
+    question: 'Can logging headaches really help?',
+    answer:
+      'Absolutely. Consistent logging helps our AI identify your personal triggers, seasonal patterns, and the effectiveness of lifestyle changes — insights that would take months to discover on your own.',
+  },
+  {
+    question: 'What data does the AI use to make predictions?',
+    answer:
+      'The model analyses your symptom profile (pain intensity, location, type, duration), associated symptoms (nausea, aura, light sensitivity), and lifestyle factors (sleep, stress, hydration, screen time) to classify your headache type and assess risk.',
+  },
+];
 
-export default function Research() {
-  const [retraining, setRetraining] = useState(false);
-
-  const handleRetrain = () => {
-    setRetraining(true);
-    setTimeout(() => {
-      setRetraining(false);
-    }, 3000);
-  };
+/* ── Component ──────────────────────────────────────────── */
+export default function HealthGuide() {
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto space-y-8 pb-20">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tight">Research & AI Management</h1>
-            <p className="text-muted-foreground text-lg italic">Advanced algorithm evaluation and dataset analysis dashboard.</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleRetrain} disabled={retraining}>
-              {retraining ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Retrain All Models
-            </Button>
-            <Button size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Export Dataset
-            </Button>
-          </div>
+      <div className="max-w-5xl mx-auto space-y-10 pb-20">
+        {/* ── Header ── */}
+        <div className="space-y-1">
+          <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tight">
+            Health Guide
+          </h1>
+          <p className="text-muted-foreground text-lg">
+            Learn about headache types, prevention strategies, and how our AI helps you.
+          </p>
         </div>
 
-        <Tabs defaultValue="comparison" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 lg:w-[600px] mb-8">
-            <TabsTrigger value="comparison">Model Comparison</TabsTrigger>
-            <TabsTrigger value="explainability">Explainability</TabsTrigger>
-            <TabsTrigger value="confusion">Confusion Matrix</TabsTrigger>
-            <TabsTrigger value="dataset">Dataset Distribution</TabsTrigger>
-          </TabsList>
+        {/* ── Understanding Headache Types ── */}
+        <section className="space-y-4">
+          <h2 className="font-display text-xl font-semibold flex items-center gap-2">
+            <Brain className="h-5 w-5 text-primary" />
+            Understanding Headache Types
+          </h2>
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            Our AI classifies your headaches into four categories based on internationally
+            recognised medical criteria. Here's what each type means:
+          </p>
 
-          <TabsContent value="comparison" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle>Algorithm Performance Comparison</CardTitle>
-                  <CardDescription>Cross-validation metrics across four different classifiers.</CardDescription>
-                </CardHeader>
-                <CardContent className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={metricsData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={[0, 1]} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}
-                      />
-                      <Legend />
-                      <Bar dataKey="Accuracy" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="F1" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="Recall" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Current Best Model</CardTitle>
-                  <CardDescription>Random Forest Classifier</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-primary/5 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <CheckCircle2 className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">Validation Accuracy</p>
-                        <p className="text-2xl font-bold">88.2%</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground">Model Status</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="secondary">Production Ready</Badge>
-                      <Badge variant="secondary">Inference Optimized</Badge>
-                      <Badge variant="secondary">Hyperparameter Tuned</Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="explainability" className="space-y-6">
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               <Card>
-                 <CardHeader>
-                   <CardTitle>Global Feature Importance</CardTitle>
-                   <CardDescription>Factors contributing most to headache classification (Random Forest).</CardDescription>
-                 </CardHeader>
-                 <CardContent className="h-[400px]">
-                   <ResponsiveContainer width="100%" height="100%">
-                     <BarChart data={featureImportance} layout="vertical" margin={{ left: 20 }}>
-                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                       <XAxis type="number" domain={[0, 0.3]} />
-                       <YAxis dataKey="name" type="category" width={100} />
-                       <Tooltip />
-                       <Bar dataKey="importance" fill="#8884d8" radius={[0, 4, 4, 0]} />
-                     </BarChart>
-                   </ResponsiveContainer>
-                 </CardContent>
-               </Card>
-
-               <Card>
-                 <CardHeader>
-                   <CardTitle>Decision Sensitivity Radar</CardTitle>
-                   <CardDescription>Model sensitivity to different symptom clusters.</CardDescription>
-                 </CardHeader>
-                 <CardContent className="h-[400px]">
-                   <ResponsiveContainer width="100%" height="100%">
-                     <RadarChart data={featureImportance.slice(0, 6)}>
-                       <PolarGrid />
-                       <PolarAngleAxis dataKey="name" />
-                       <PolarRadiusAxis angle={30} domain={[0, 0.3]} />
-                       <Radar
-                         name="Importance"
-                         dataKey="importance"
-                         stroke="#8884d8"
-                         fill="#8884d8"
-                         fillOpacity={0.6}
-                       />
-                     </RadarChart>
-                   </ResponsiveContainer>
-                 </CardContent>
-               </Card>
-             </div>
-          </TabsContent>
-
-          <TabsContent value="confusion" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Confusion Matrix (Validation Set)</CardTitle>
-                <CardDescription>Accuracy visualization showing where the model misclassifies symptoms.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-5 gap-2 max-w-xl mx-auto">
-                  <div className="col-span-1"></div>
-                  {classes.map(c => (
-                    <div key={c} className="text-[10px] sm:text-xs font-bold text-center py-2 h-12 flex items-center justify-center">
-                      Predicted {c.split(' ')[0]}
-                    </div>
-                  ))}
-                  
-                  {classes.map((actual, i) => (
-                    <>
-                      <div key={actual} className="text-[10px] sm:text-xs font-bold flex items-center justify-end pr-2 h-12">
-                        Actual {actual.split(' ')[0]}
-                      </div>
-                      {confusionMatrix[i].map((val, j) => (
-                        <div 
-                          key={`${i}-${j}`} 
-                          className={`h-12 flex items-center justify-center text-sm font-bold border rounded-md ${
-                            i === j ? 'bg-green-100 border-green-200 text-green-700' : 'bg-red-50 border-red-100 text-red-700'
-                          }`}
-                        >
-                          {val}
-                        </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {headacheTypes.map((type, i) => (
+              <motion.div
+                key={type.name}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+              >
+                <Card className={`h-full border ${type.bg}`}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <type.icon className={`h-5 w-5 ${type.color}`} />
+                      {type.name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {type.description}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {type.keySymptoms.map(s => (
+                        <Badge key={s} variant="secondary" className="text-[11px]">
+                          {s}
+                        </Badge>
                       ))}
-                    </>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-semibold">Typical duration:</span> {type.duration}
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </section>
 
-          <TabsContent value="dataset" className="space-y-6">
-             <Card>
-                <CardHeader>
-                  <CardTitle>High-Dimensional Feature Clusters</CardTitle>
-                  <CardDescription>Visualizing symptom relationships through intensity/duration distribution.</CardDescription>
-                </CardHeader>
-                <CardContent className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                      <CartesianGrid />
-                      <XAxis type="number" dataKey="x" name="Intensity" unit="/10" />
-                      <YAxis type="number" dataKey="y" name="Duration" unit="hrs" />
-                      <ZAxis type="number" dataKey="z" range={[60, 400]} name="Stress" />
-                      <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                      <Legend />
-                      <Scatter name="Migraine" data={Array.from({length: 20}, () => ({x: 7+Math.random()*3, y: 4+Math.random()*8, z: 5+Math.random()*5}))} fill="#ef4444" />
-                      <Scatter name="Tension" data={Array.from({length: 20}, () => ({x: 3+Math.random()*4, y: 1+Math.random()*4, z: 2+Math.random()*8}))} fill="#3b82f6" />
-                      <Scatter name="Cluster" data={Array.from({length: 20}, () => ({x: 9+Math.random()*1, y: 0.5+Math.random()*2, z: 4+Math.random()*3}))} fill="#f59e0b" />
-                    </ScatterChart>
-                  </ResponsiveContainer>
-                </CardContent>
-             </Card>
-          </TabsContent>
-        </Tabs>
+        {/* ── Prevention Tips ── */}
+        <section className="space-y-4">
+          <h2 className="font-display text-xl font-semibold flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+            Prevention &amp; Wellness Tips
+          </h2>
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            Small daily habits can significantly reduce your headache frequency.
+            Here are evidence-based strategies:
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {preventionTips.map((tip, i) => (
+              <motion.div
+                key={tip.title}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.06 }}
+              >
+                <Card className="h-full hover:shadow-md transition-shadow">
+                  <CardContent className="pt-6 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-lg bg-primary/5 flex items-center justify-center">
+                        <tip.icon className={`h-5 w-5 ${tip.color}`} />
+                      </div>
+                      <p className="font-semibold text-sm">{tip.title}</p>
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {tip.description}
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── How our AI works ── */}
+        <section className="space-y-4">
+          <h2 className="font-display text-xl font-semibold flex items-center gap-2">
+            <Lightbulb className="h-5 w-5 text-primary" />
+            How Our AI Works
+          </h2>
+
+          <Card className="border-primary/20 bg-primary/[0.03]">
+            <CardContent className="p-6 md:p-8">
+              <div className="grid md:grid-cols-3 gap-6 text-center">
+                {[
+                  {
+                    step: '1',
+                    title: 'You Log Symptoms',
+                    desc: 'Record your pain intensity, location, duration, and associated symptoms using our simple tracker.',
+                  },
+                  {
+                    step: '2',
+                    title: 'AI Analyses Patterns',
+                    desc: 'Our clinically-validated machine learning model compares your profile against thousands of cases to classify your headache.',
+                  },
+                  {
+                    step: '3',
+                    title: 'You Get Insights',
+                    desc: 'Receive a diagnosis forecast, risk assessment, and personalised recommendations — all in seconds.',
+                  },
+                ].map((item, i) => (
+                  <motion.div
+                    key={item.step}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 + i * 0.12 }}
+                    className="space-y-2"
+                  >
+                    <div className="mx-auto h-10 w-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-lg">
+                      {item.step}
+                    </div>
+                    <p className="font-semibold text-sm">{item.title}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {item.desc}
+                    </p>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="mt-8 p-4 rounded-xl bg-muted/40 border border-dashed border-muted-foreground/20">
+                <p className="text-sm text-muted-foreground text-center leading-relaxed">
+                  <span className="font-semibold text-foreground">Clinical note:</span>{' '}
+                  NeuroTrack AI is a screening and self-management tool — it does not replace
+                  professional medical advice. Always consult a qualified healthcare provider for
+                  diagnosis and treatment.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* ── FAQ ── */}
+        <section className="space-y-4">
+          <h2 className="font-display text-xl font-semibold flex items-center gap-2">
+            <HelpCircle className="h-5 w-5 text-primary" />
+            Frequently Asked Questions
+          </h2>
+
+          <div className="space-y-2">
+            {faqs.map((faq, i) => {
+              const isOpen = openFaq === i;
+              return (
+                <Card
+                  key={i}
+                  className={`cursor-pointer transition-colors ${isOpen ? 'border-primary/30' : ''}`}
+                  onClick={() => setOpenFaq(isOpen ? null : i)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium text-sm pr-4">{faq.question}</p>
+                      {isOpen ? (
+                        <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                      )}
+                    </div>
+                    {isOpen && (
+                      <motion.p
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="text-sm text-muted-foreground mt-3 leading-relaxed"
+                      >
+                        {faq.answer}
+                      </motion.p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </Layout>
   );

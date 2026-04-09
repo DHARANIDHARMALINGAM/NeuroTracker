@@ -14,7 +14,7 @@ const navItems = [
   { path: '/analytics', label: 'Analytics' },
   { path: '/report', label: 'Report' },
   { path: '/doctor-finder', label: 'Clinical Toolkit' },
-  { path: '/research', label: 'Research' },
+  { path: '/health-guide', label: 'Health Guide' },
   { path: '/settings', label: 'Settings' },
 ];
 
