@@ -38,7 +38,7 @@ export default function Auth() {
 
     try {
       if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -50,8 +50,9 @@ export default function Auth() {
         if (error) throw error;
         toast({
           title: 'Account created!',
-          description: 'Please check your email for a confirmation link.',
+          description: 'Redirecting to your dashboard...',
         });
+        setTimeout(() => navigate('/dashboard'), 500);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
