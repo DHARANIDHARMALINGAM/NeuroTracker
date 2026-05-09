@@ -53,10 +53,31 @@ serve(async (req) => {
     // 2. Preprocessing & Scaling
     const processed: any = { ...data };
     processed.severity_score = (data.pain_intensity * 0.5) + (Number(data.nausea) * 2.0);
-    
-    const scaleCols = ["age", "pain_intensity", "duration_hours", "stress_level", "sleep_hours"];
+
+    // Calculate missing engineered features
+    processed.frequency_index = (data.frequency_per_month || 2) / 30.0;
+    processed.trigger_count = [
+      data.stress_level > 7 ? 1 : 0,
+      (data.sleep_hours || 7) < 6 ? 1 : 0,
+      data.weather_sensitivity ? 1 : 0,
+    ].reduce((a: number, b: number) => a + b, 0);
+    processed.symptom_count = [
+      data.nausea, data.vomiting, data.photophobia,
+      data.phonophobia, data.aura_present
+    ].filter(Boolean).length;
+
+    // Label-encode categorical features using the encoders from model_params
+    const encoders = activeParams.encoders || {};
+    const encodedData: any = { ...processed };
+    for (const [feature, categories] of Object.entries(encoders)) {
+      const cats = categories as string[];
+      const rawVal = String(processed[feature] || '');
+      const idx = cats.indexOf(rawVal);
+      encodedData[feature] = idx >= 0 ? idx : 0;
+    }
+
     const X_scaled = feature_names.map((name: string, i: number) => {
-      let val = Number(processed[name] || 0);
+      const val = Number(encodedData[name] ?? 0);
       if (scaler?.mean?.[i] !== undefined) {
         return (val - scaler.mean[i]) / (scaler.scale[i] || 1);
       }
