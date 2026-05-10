@@ -23,7 +23,7 @@ export default function HeadacheTracker() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  
+
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -69,11 +69,11 @@ export default function HeadacheTracker() {
         age,
         gender,
         pain_intensity: intensity,
-        pain_location: location === 'front' ? 'Frontal' : 
-                       location === 'side' ? 'Temporal' : 
-                       location === 'back' ? 'Occipital' : 'Bilateral',
-        pain_quality: painType === 'throbbing' ? 'Throbbing' : 
-                       painType === 'stabbing' ? 'Stabbing' : 'Pressing',
+        pain_location: location === 'front' ? 'Frontal' :
+          location === 'side' ? 'Temporal' :
+            location === 'back' ? 'Occipital' : 'Bilateral',
+        pain_quality: painType === 'throbbing' ? 'Throbbing' :
+          painType === 'stabbing' ? 'Stabbing' : 'Pressing',
         duration_hours: duration / 60,
         nausea: symptoms.includes('nausea'),
         vomiting: symptoms.includes('vomiting'),
@@ -110,7 +110,7 @@ export default function HeadacheTracker() {
           user_id: user.id,
           age,
           gender,
-          duration: Math.round(duration / 60) || 1, 
+          duration: Math.round(duration / 60) || 1,
           intensity,
           location: mlData.pain_location,
           character: mlData.pain_quality,
@@ -137,20 +137,20 @@ export default function HeadacheTracker() {
         throw new Error(dbError.message || 'Failed to save entries to the database');
       }
 
-      toast({ 
-        title: 'Entry saved!', 
-        description: `AI Predicted: ${predictionData.prediction}` 
+      toast({
+        title: 'Entry saved!',
+        description: `AI Predicted: ${predictionData.prediction}`
       });
-      
+
       if (insertedData) {
         navigate(`/prediction/${insertedData.id}`);
       }
     } catch (error: any) {
       console.error("Submission Error Details:", error);
-      toast({ 
-        title: 'Form Submission Error', 
-        description: error.message || 'Failed to analyze symptoms', 
-        variant: 'destructive' 
+      toast({
+        title: 'Form Submission Error',
+        description: error.message || 'Failed to analyze symptoms',
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);

@@ -76,10 +76,28 @@ serve(async (req) => {
       encodedData[feature] = idx >= 0 ? idx : 0;
     }
 
+    // Build a mapping of which features are numeric (need scaling) vs categorical/boolean (no scaling)
+    const categoricalFeatures = new Set(Object.keys(encoders || {}));
+    const booleanFeatures = new Set([
+      'nausea', 'vomiting', 'photophobia', 'phonophobia',
+      'aura_present', 'visual_disturbance', 'weather_sensitivity',
+      'hormonal_factor', 'family_history'
+    ]);
+
+    // The scaler's mean/scale arrays correspond 1:1 with ONLY the numeric features, in order
+    const numericFeatureIndices: number[] = [];
+    feature_names.forEach((name: string, i: number) => {
+      if (!categoricalFeatures.has(name) && !booleanFeatures.has(name)) {
+        numericFeatureIndices.push(i);
+      }
+    });
+
     const X_scaled = feature_names.map((name: string, i: number) => {
       const val = Number(encodedData[name] ?? 0);
-      if (scaler?.mean?.[i] !== undefined) {
-        return (val - scaler.mean[i]) / (scaler.scale[i] || 1);
+      // Only scale numeric features using the correct scaler index
+      const scalerIdx = numericFeatureIndices.indexOf(i);
+      if (scalerIdx >= 0 && scaler?.mean?.[scalerIdx] !== undefined) {
+        return (val - scaler.mean[scalerIdx]) / (scaler.scale[scalerIdx] || 1);
       }
       return val;
     });

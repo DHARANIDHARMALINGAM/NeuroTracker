@@ -15,24 +15,41 @@ export default function Settings() {
   const { toast } = useToast();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         navigate('/auth?mode=login');
         return;
       }
-      const p = getProfile();
-      setName(session.user.user_metadata?.full_name || p.name);
-      setEmail(session.user.email || p.email);
+      setName(user.user_metadata?.full_name || '');
+      setEmail(user.email || '');
     };
     checkAuth();
   }, [navigate]);
 
-  const handleSave = () => {
-    saveProfile({ name, email });
-    toast({ title: 'Profile updated', description: 'Your changes have been saved.' });
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { full_name: name }
+      });
+      
+      if (error) throw error;
+      
+      saveProfile({ name, email }); // Keep local for fallback
+      toast({ title: 'Profile updated', description: 'Your changes have been saved to your account.' });
+    } catch (error: any) {
+      toast({ 
+        title: 'Save failed', 
+        description: error.message,
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -40,11 +57,32 @@ export default function Settings() {
     navigate('/');
   };
 
-  const handleClearData = () => {
-    if (window.confirm('Are you sure? This will delete all your headache data. This action cannot be undone.')) {
-      localStorage.removeItem('neurotrack_entries');
-      localStorage.removeItem('neurotrack_predictions');
-      toast({ title: 'Data cleared', description: 'All headache data has been deleted.' });
+  const handleClearData = async () => {
+    if (window.confirm('Are you sure? This will delete all your headache data from the database. This action cannot be undone.')) {
+      setLoading(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { error } = await supabase
+          .from('headache_history')
+          .delete()
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+
+        localStorage.removeItem('neurotrack_entries');
+        localStorage.removeItem('neurotrack_predictions');
+        toast({ title: 'Data cleared', description: 'All headache records have been removed from the database.' });
+      } catch (error: any) {
+        toast({ 
+          title: 'Error clearing data', 
+          description: error.message,
+          variant: 'destructive'
+        });
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
