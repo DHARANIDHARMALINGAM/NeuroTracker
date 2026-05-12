@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { 
   Stethoscope, 
   AlertTriangle, 
@@ -198,7 +199,9 @@ export default function ClinicalToolkit() {
                  <div className="p-3 bg-muted rounded-xl text-xs leading-relaxed">
                    Stay hydrated and avoid high-screen time if you feel tension building.
                  </div>
-                 <Button variant="link" className="p-0 text-xs h-auto underline">Read Neurology Guidelines</Button>
+                 <Link to="/health-guide">
+                    <Button variant="link" className="p-0 text-xs h-auto underline">Read Neurology Guidelines</Button>
+                 </Link>
                </CardContent>
              </Card>
           </div>
