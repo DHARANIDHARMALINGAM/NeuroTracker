@@ -30,7 +30,15 @@ serve(async (req) => {
   }
 
   try {
-    const { data, algorithm = 'SVM' } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { data, algorithm = 'SVM' } = body;
+
+    if (!data) {
+      return new Response(JSON.stringify({ error: "Missing 'data' in request body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", 'Access-Control-Allow-Origin': '*' },
+      });
+    }
     
     // Create Supabase Client to fetch the dynamic model
     const supabaseClient = createClient(
@@ -44,10 +52,13 @@ serve(async (req) => {
       .select('model_params, accuracy')
       .order('version', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle(); // Safer than single() as it doesn't throw if 0 rows found
 
-    // Use dynamic params if available, otherwise use base baseline
-    const activeParams = (dynamicModel?.model_params as any) || baseModelParams;
+    // Use dynamic params if available and valid, otherwise use base baseline
+    const dynamicParams = dynamicModel?.model_params as any;
+    const isValidModel = dynamicParams && dynamicParams.feature_names && dynamicParams.support_vectors;
+    const activeParams = isValidModel ? dynamicParams : baseModelParams;
+    
     const { feature_names, classes, scaler, gamma, support_vectors, dual_coef, intercept, n_support } = activeParams;
 
     // 2. Preprocessing & Scaling
