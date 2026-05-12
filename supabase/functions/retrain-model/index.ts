@@ -33,7 +33,13 @@ serve(async (req) => {
 
     if (fetchError) throw fetchError;
     if (!trainingSet || trainingSet.length < 3) {
-      return new Response(JSON.stringify({ message: "Maintaining current model accuracy (need 3+ new data points for next increment)" }), { status: 200 });
+      return new Response(JSON.stringify({ 
+        status: "info",
+        message: "Maintaining current model accuracy (need 3+ new data points for next increment)" 
+      }), { 
+        status: 200,
+        headers: { "Content-Type": "application/json", 'Access-Control-Allow-Origin': '*' }
+      });
     }
 
     // 2. DATA VALIDATION: Filter for complete records only
@@ -48,14 +54,14 @@ serve(async (req) => {
     });
 
     // 4. GENERATE NEW MODEL VERSION (v.2.x)
-    const { data: currentModel } = await supabaseClient
+    const { data: currentModel, error: modelError } = await supabaseClient
       .from('ml_models')
-      .select('*')
+      .select('version')
       .order('version', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    const nextVersion = (currentModel?.version || 1) + 1;
+    const nextVersion = (currentModel?.version || 0) + 1;
     
     // Calculate new accuracy metrics based on verification rates
     const accuracy = 0.85 + (validData.length / 1000); // Simulated drift

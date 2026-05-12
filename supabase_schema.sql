@@ -57,11 +57,14 @@ CREATE TABLE IF NOT EXISTS public.risk_predictions (
 CREATE TABLE IF NOT EXISTS public.ml_models (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT UNIQUE,
+  version INTEGER,
   accuracy FLOAT,
   precision_score FLOAT,
   recall_score FLOAT,
   f1_score FLOAT,
+  dataset_size INTEGER,
   confusion_matrix JSONB,
+  model_params JSONB,
   training_logs TEXT,
   last_trained TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
